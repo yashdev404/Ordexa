@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ordexa-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ordexa_db}
+      POSTGRES_USER: ${POSTGRES_USER:-ordexa_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ordexa_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/migration:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  adminer:
+    image: adminer:latest
+    container_name: ordexa-adminer
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
