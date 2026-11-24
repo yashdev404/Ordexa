@@ -8,9 +8,9 @@ spring:
     name: ordexa-backend
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ordexa_db
-    username: ordexa_user
-    password: ordexa_password
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ordexa_db}
+    username: ${SPRING_DATASOURCE_USERNAME:ordexa_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:ordexa_password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -29,5 +29,5 @@ spring:
 
 ordexa:
   jwt:
-    secret: dGhpc2lzYXNlY3JldGtleWZvcm9yZGV4YWJhY2tlbmRqd3RhdXRoZW50aWNhdGlvbnNlY3VyZXN5c3RlbQ==
-    expiration-ms: 86400000 # 24 Hours
+    secret: ${ORDEXA_JWT_SECRET:dGhpc2lzYXNlY3JldGtleWZvcm9yZGV4YWJhY2tlbmRqd3RhdXRoZW50aWNhdGlvbnNlY3VyZXN5c3RlbQ==}
+    expiration-ms: ${ORDEXA_JWT_EXPIRATION_MS:86400000} # 24 Hours
