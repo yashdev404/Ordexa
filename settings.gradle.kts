@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Ordexa"
 include(":app")
- 
+include(":backend")
