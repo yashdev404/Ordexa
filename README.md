@@ -2,16 +2,15 @@
 
 Ordexa is an enterprise-grade factory operations, multi-warehouse inventory, and dispatch management platform. The platform is designed around three core operational principles:
 
-1. Every order must be traceable.
-2. Every stock movement must be accountable.
-3. Every shipment must be verifiable.
-
+1. **Every order must be traceable.**
+2. **Every stock movement must be accountable.**
+3. **Every shipment must be verifiable.**
 
 ---
 
 ## System Architecture Overview
 
-Ordexa operates on a Client-Server modular architecture. The Android client communicates with the backend service via REST APIs over HTTPS, managing local offline persistence and real-time operational workflows.
+Ordexa operates on a Client-Server modular architecture. The Android client communicates with the Spring Boot backend service via REST APIs over HTTP/JSON, managing local offline persistence and real-time operational workflows.
 
 ```
 +-------------------------------------------------------------------+
@@ -19,18 +18,18 @@ Ordexa operates on a Client-Server modular architecture. The Android client comm
 |          Kotlin + Jetpack Compose + Room + StateFlow + Retrofit   |
 +-------------------------------------------------------------------+
                                   |
-                                  | REST API (HTTPS / JSON)
+                                  | REST API (HTTP / JSON)
                                   v
 +-------------------------------------------------------------------+
-|                     Ordexa Backend (Spring Boot 3)                |
+|                     Ordexa Backend (Spring Boot 3.4)              |
 |                                                                   |
 |  +---------------+  +---------------+  +-----------------------+  |
 |  | Security & Auth|  | Factory & Org |  | Order Management      |  |
 |  | Module (JWT)  |  | Module        |  | Module (PDF/State)    |  |
 |  +---------------+  +---------------+  +-----------------------+  |
 |  +---------------+  +---------------+  +-----------------------+  |
-|  | Inventory     |  | Dispatch &    |  | AI Assistant          |  |
-|  | Ledger Module |  | Logistics     |  | Module (Tool Calling) |  |
+|  | Inventory     |  | Dispatch &    |  | Product Management    |  |
+|  | Ledger Module |  | Logistics     |  | Module (CRUD / SKU)   |  |
 |  +---------------+  +---------------+  +-----------------------+  |
 +-------------------------------------------------------------------+
                                   |
@@ -38,8 +37,8 @@ Ordexa operates on a Client-Server modular architecture. The Android client comm
                |                                     |
                v                                     v
    +-----------------------+             +-----------------------+
-   | PostgreSQL Database   |             | LLM / Document OCR    |
-   | (Flyway Migrations)   |             | Service API           |
+   | PostgreSQL 16 DB      |             | Adminer Web GUI       |
+   | (Flyway Migrations)   |             | (Port 8081)           |
    +-----------------------+             +-----------------------+
 ```
 
@@ -52,13 +51,11 @@ The frontend is a native Android application built using modern Android developm
 ### Directory Structure
 
 ```
-com.example.ordexa/
+app/src/main/java/com/example/ordexa/
 ├── data/
 │   ├── local/
-│   │   ├── entities/        # Room Database Entities (DispatchEntity, InventoryEntity, OrderEntity)
-│   │   └── OrdexaDatabase   # Local Room Database Configuration
+│   │   └── entities/        # Room Database Entities (DispatchEntity, InventoryEntity, OrderEntity)
 │   ├── mock/                # Mock Data for Off-Network Testing & Demos
-│   ├── remote/              # Retrofit API Interfaces & DTOs
 │   └── repository/          # OrderRepository, InventoryRepository, DispatchRepository, ApprovalRepository
 ├── domain/
 │   ├── model/               # Core Domain Entities (User, OrderModel, InventoryModel, DispatchModel, EodModel)
@@ -82,36 +79,13 @@ com.example.ordexa/
 
 ### Technology Stack
 
-- Language: Kotlin 2.0+
-- UI Framework: Jetpack Compose with Material Design 3
-- Navigation: Jetpack Navigation Compose
-- Architecture Pattern: Clean Architecture (Data, Domain, Presentation) with MVVM & Unidirectional Data Flow (UDF)
-- State Management: Kotlin Coroutines, StateFlow, ViewModel
-- Local Database: Room Database (SQLite abstraction)
-- Networking: Retrofit 2, OkHttp 4
-- AI Integration: Google Gemini API (Generative AI SDK) for context-aware operational reporting
-
-### Key Architectural Methods and Rationale
-
-1. Clean Architecture (UI, Domain, Data Layers)
-   - Method: Separation of concerns into UI (Compose), Domain (UseCases, Models), and Data (Repositories, Room, Retrofit).
-   - Rationale: Decouples business logic from framework-specific APIs, ensuring testability and allowing data sources to be swapped without affecting UI rendering.
-
-2. Unidirectional Data Flow (UDF) with StateFlow
-   - Method: ViewModels expose immutable `StateFlow` states to Compose screens. User actions trigger events sent to the ViewModel.
-   - Rationale: Eliminates UI state synchronization bugs, race conditions, and accidental double-submits during warehouse operations.
-
-3. Offline-First Caching via Room Database
-   - Method: Local SQLite storage via Room DB acting as the source of truth for read operations.
-   - Rationale: Factory floors and multi-warehouse facilities frequently suffer from poor network coverage. Offline caching ensures uninterrupted worker picking and loading operations.
-
-4. Real-Time Barcode & QR Code Verification Engine
-   - Method: Match scanned SKU barcodes against exact order line items during truck loading.
-   - Rationale: Automatically blocks wrong SKU loading (e.g., loading M8 washers instead of M10 washers), reducing return shipment rates and catalog discrepancies.
-
-5. AI Operations Assistant Interface
-   - Method: Conversational UI linked with live operational data context injection.
-   - Rationale: Allows factory managers to retrieve stock balances, open discrepancies, and shipment summaries using natural language queries without constructing complex manual filters.
+- **Language:** Kotlin 2.0+
+- **UI Framework:** Jetpack Compose with Material Design 3
+- **Navigation:** Jetpack Navigation Compose
+- **Architecture Pattern:** Clean Architecture (Data, Domain, Presentation) with MVVM & Unidirectional Data Flow (UDF)
+- **State Management:** Kotlin Coroutines, StateFlow, ViewModel
+- **Local Database:** Room Database (SQLite abstraction)
+- **Build System:** Gradle 9.5+ with AGP 9.0+
 
 ---
 
@@ -119,107 +93,101 @@ com.example.ordexa/
 
 The backend service is designed as a high-performance Modular Monolith capable of serving multi-tenant factory operations with strict data isolation.
 
-### Directory Structure & Database Migration
+### Directory Structure
 
 ```
 backend/
-├── db/
-│   └── migration/
-│       └── V1__init_ordexa_schema.sql   # PostgreSQL Relational Schema & Constraints
+├── src/main/java/com/ordexa/backend/
+│   ├── config/              # SecurityConfig (Stateless CORS & BCrypt)
+│   ├── controller/          # REST Controllers
+│   │   ├── AuthController.java
+│   │   ├── DispatchController.java
+│   │   ├── EodController.java
+│   │   ├── InventoryController.java
+│   │   ├── OrderController.java
+│   │   └── ProductController.java       # Product Management APIs
+│   ├── dto/                 # Request & Response Data Transfer Objects
+│   ├── entity/              # JPA Entities (PostgreSQL Tables)
+│   ├── repository/          # Spring Data JPA Repositories
+│   ├── service/             # Business Services & Validation Logic
+│   └── OrdexaApplication.java
+└── src/main/resources/
+    ├── application.yml      # Environment-variable ready configuration
+    └── db/migration/        # Flyway SQL migrations
+        ├── V1__init_ordexa_schema.sql
+        └── V2__seed_ordexa_data.sql
 ```
-
-### Database Schema Overview
-
-The database model covers the complete supply chain hierarchy:
-- Companies, Factories, Warehouses, Locations
-- Users, Roles, Factory Scopes
-- Customers, Products, Purchase Orders, Order Items
-- Inventory Stock, Inventory Ledger Transactions
-- Trucks, Shipments, Shipment Items, Discrepancy Logs
 
 ### Technology Stack
 
-- Language & Runtime: Java 21 LTS (Utilizing Virtual Threads / Project Loom)
-- Framework: Spring Boot 3.x, Spring Security 6
-- Database: PostgreSQL 16+
-- Database Migration: Flyway Versioned SQL Scripts
-- Containerization: Docker, Docker Compose
-- AI Integration Framework: Spring AI with Deterministic Tool Calling
+- **Language & Runtime:** Java 21 LTS
+- **Framework:** Spring Boot 3.4.0, Spring Security 6, Spring Data JPA
+- **Database:** PostgreSQL 16+ (Dockerized container)
+- **Database Migration:** Flyway 10+ (`flyway-core`, `flyway-database-postgresql`)
+- **Containerization:** Docker & Docker Compose
+- **Build System:** Gradle 9.5 (Multi-Project integration with `:app` and `:backend`)
 
-### Key Architectural Methods and Rationale
+### Available API Endpoints (Base URL: `/api/v1`)
 
-1. Modular Monolith Pattern
-   - Method: Unified Spring Boot 3 application with strict boundary enforcement between domain modules.
-   - Rationale: Provides high developer velocity and single-deployment simplicity while maintaining clean isolation boundaries for future microservices extraction if required.
-
-2. Immutable Inventory Ledger Model
-   - Method: Stock changes are saved as immutable transactional ledger entries (`RECEIPT`, `RESERVATION`, `PICK`, `DISPATCH`, `DAMAGE`, `ADJUSTMENT`) rather than simple quantity overwrites.
-   - Rationale: Strict accountability for physical vs. reserved stock. Stock reservations do not deduct physical stock until actual dispatch verification occurs, preventing unvetted inventory edits.
-
-3. Database Concurrency Locking Strategy
-   - Method: Combined usage of optimistic version checking (`@Version`) and pessimistic row-level locking (`SELECT ... FOR UPDATE`).
-   - Rationale: Prevents negative available balances and race conditions when multiple warehouse managers try to reserve or pick the same SKU concurrently.
-
-4. Multi-Tenant Data Isolation
-   - Method: Tenant context (`company_id`, `factory_id`) passed via JWT and enforced at the database query level via Spring Security interceptors.
-   - Rationale: Guarantees strict data isolation between companies and factories, preventing cross-tenant data leaks.
-
-5. Finite State Machine for Logistics Verification
-   - Method: Strict state progression (`DRAFT` -> `READY_FOR_ASSIGNMENT` -> `ASSIGNED` -> `LOADING` -> `LOADED` -> `VERIFIED` -> `DISPATCH_APPROVED` -> `DISPATCHED` -> `DELIVERED`).
-   - Rationale: Guarantees that no shipment can be dispatched without 100% scan reconciliation, driver assignment, destination route validation, and manager approval.
-
----
-
-## Future Planned Aspects (Ordexa 2.0 Roadmap)
-
-1. Inter-Factory Stock Transfers
-   - Enabling multi-hop logistics tracking and stock transfer requests across disparate factory locations.
-
-2. CameraX & MLKit On-Device Barcode Scanner
-   - Integrating native CameraX frame analysis directly into Compose for zero-latency 1D/2D barcode scanning.
-
-3. Background Sync Engine with Conflict Resolution
-   - Expanding Room database synchronization with delta-based server sync and vector clock conflict resolution for offline dispatches.
-
-4. Regional Language Localization
-   - Adding multi-language support (Hindi, Punjabi, Kannada, etc.) tailored for factory floor operators.
-
-5. Predictive Inventory Demand Forecasting
-   - Machine learning algorithms to analyze historical stock consumption and automatically suggest reorder thresholds.
-
-6. On-Premises Edge LLM Integration
-   - Supporting lightweight local LLM execution for environments with strict cloud connectivity restrictions.
+| Module | Method | Endpoint | Description |
+| :--- | :--- | :--- | :--- |
+| **Auth** | `POST` | `/api/v1/auth/login` | User login and JWT authentication |
+| **Products** | `POST` | `/api/v1/products` | Create a new product (SKU, name, UOM, unit price) |
+| | `GET` | `/api/v1/products?companyId={id}` | List all products belonging to a company |
+| | `GET` | `/api/v1/products/{id}` | Retrieve single product details by ID |
+| | `GET` | `/api/v1/products/by-sku?companyId={id}&sku={sku}` | Look up product by company ID and SKU |
+| | `PUT` | `/api/v1/products/{id}` | Update product details |
+| | `DELETE` | `/api/v1/products/{id}` | Delete product |
+| **Orders** | `GET` | `/api/v1/orders?factoryId={id}` | List orders for a specific factory |
+| | `POST` | `/api/v1/orders/ingest` | Ingest Purchase Orders (customer, line items, totals) |
+| | `PUT` | `/api/v1/orders/{id}/status` | Update order status (`DRAFT`, `APPROVED`, etc.) |
+| **Inventory**| `GET` | `/api/v1/inventory/stock?warehouseId={id}` | Get real-time stock levels by warehouse |
+| | `POST` | `/api/v1/inventory/grn` | Record Goods Receipt Note (GRN) |
+| | `POST` | `/api/v1/inventory/damage` | Report damaged goods and record discrepancy |
+| **Dispatch** | `GET` | `/api/v1/dispatch/shipments?factoryId={id}` | View factory shipments |
+| | `POST` | `/api/v1/dispatch/assign-truck` | Assign truck and driver to a shipment |
+| | `POST` | `/api/v1/dispatch/resolve-discrepancy/{id}` | Resolve dispatch discrepancy with manager sign-off |
+| **EOD** | `GET` | `/api/v1/eod/summary?factoryId={id}&date={date}` | Generate daily End-of-Day operations summary |
 
 ---
 
-## Setup and Building
+## Setup & Running the Project
 
 ### Prerequisites
 
-- Android Studio Ladybug (2024.2.1) or newer
-- JDK 17 or JDK 21
-- Android SDK 37 (Minimum SDK 24)
-- Docker & Docker Compose (for backend database)
+- **Java JDK 21**
+- **Android Studio Ladybug (2024.2.1+)** with Android SDK 37 (Min SDK 24)
+- **Docker Desktop** (running with WSL 2 on Windows)
 
-### Building the Android App
+---
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/ordexa.git
-   cd ordexa
-   ```
+### Step 1: Start the Database & Adminer (Docker)
 
-2. Open the project in Android Studio.
+From the project root directory, run:
+```powershell
+docker compose up -d
+```
+* **PostgreSQL 16:** Runs on `localhost:5432` (database: `ordexa_db`, user: `ordexa_user`)
+* **Adminer Web GUI:** Runs on `http://localhost:8081` for database inspection.
 
-3. Sync Gradle and run on an Android Emulator or physical device:
-   ```bash
-   ./gradlew assembleDebug
-   ```
+---
 
-### Running Backend Migration
+### Step 2: Start the Backend Service
 
-1. Start PostgreSQL using Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
-2. Database Flyway migrations in `backend/db/migration/` will automatically initialize the schema on startup.
+In your terminal from the project root:
+```powershell
+.\gradlew :backend:bootRun
+```
+* Spring Boot will start on **`http://localhost:8080/api/v1`**.
+* Flyway will automatically execute migrations and seed sample ground-truth data.
+
+---
+
+### Step 3: Run the Android App
+
+1. In Android Studio, select **`app`** in the top run configuration dropdown.
+2. Select your Android emulator (e.g. `Pixel_7`) or connected physical device.
+3. Click the green **Run (▶)** button (or press `Shift + F10`).
+
+> **Note for Emulator Networking:**
+> The Android emulator reaches your computer's `localhost` via `10.0.2.2`. To connect the app to the local backend, use `http://10.0.2.2:8080/api/v1`.
